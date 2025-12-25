@@ -9,3 +9,7 @@ add_test(NAME test_buffer COMMAND test_buffer)
 add_executable(test_threadsafe test_threadsafe.c)
 target_link_libraries(test_threadsafe PRIVATE unilog pthread)
 add_test(NAME test_threadsafe COMMAND test_threadsafe)
+
+add_executable(test_signal test_signal.c)
+target_link_libraries(test_signal PRIVATE unilog pthread)
+add_test(NAME test_signal COMMAND test_signal)

@@ -1,6 +1,6 @@
 # unilog
 
-Universal embedded logging library for C11
+Universal embedded logging library for C11 (WIP)
 
 ## Overview
 
@@ -210,12 +210,10 @@ gcc -std=c11 -c unilog.c -I./include
 
 ## License
 
-See LICENSE file for details.
+This project is dual-licensed
+- AGPL v3 (See LICENSE file)
+- Commercial and evaluation licenses on request
 
 ## Contributing
 
-Contributions welcome! Please ensure:
-- Code follows C11 standard
-- All tests pass
-- No dynamic memory allocation
-- Thread/interrupt safety maintained
+This project does NOT accept code contributions, but feel free to open issues
