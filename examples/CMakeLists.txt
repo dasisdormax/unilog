@@ -1,0 +1,5 @@
+add_executable(basic_example basic_example.c)
+target_link_libraries(basic_example PRIVATE unilog)
+
+add_executable(interrupt_example interrupt_example.c)
+target_link_libraries(interrupt_example PRIVATE unilog)
