@@ -18,13 +18,19 @@ static _Atomic(int) g_running;
 static _Atomic(int) g_signal_count;
 
 
+static _Atomic(long long) g_write_sum;
+static _Atomic(long long) g_read_sum;
+
+
 static void signal_handler(int sig) {
     (void)sig; // unused
     struct timespec ts = {0, 5000L};
     nanosleep(&ts, NULL); // Simulate some work
+    int len = strlen("Signal handler message");
     unilog_result_t res = unilog_write(&g_log, UNILOG_LEVEL_WARN, 999999, "Signal handler message");
     if (res == UNILOG_OK) {
         atomic_fetch_add(&g_write_count, 1);
+        atomic_fetch_add(&g_write_sum, len);
     }
     atomic_fetch_add(&g_signal_count, 1);
 }
@@ -33,10 +39,12 @@ static void *signal_writer_thread(void *arg) {
     (void)arg; // unused
     
     while (atomic_load(&g_running)) {
+        int len = strlen("Writer thread message");
         unilog_result_t res = unilog_write(&g_log, UNILOG_LEVEL_INFO, 123456,
                                             "Writer thread message");
         if (res == UNILOG_OK) {
             atomic_fetch_add(&g_write_count, 1);
+            atomic_fetch_add(&g_write_sum, len);
         }
     }
     
@@ -53,6 +61,8 @@ static void *signal_reader_thread(void *arg) {
     while (atomic_load(&g_running)) {
         if (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
             atomic_fetch_add(&g_read_count, 1);
+            int len = strnlen(read_buf, sizeof(read_buf));
+            atomic_fetch_add(&g_read_sum, len);
         }
     }
     
@@ -67,6 +77,8 @@ static void test_signal_interrupt_reader(void) {
     atomic_store(&g_read_count, 0);
     atomic_store(&g_running, 1);
     atomic_store(&g_signal_count, 0);
+    atomic_store(&g_write_sum, 0);
+    atomic_store(&g_read_sum, 0);
     
     unilog_init(&g_log, buffer, sizeof(buffer));
     
@@ -101,20 +113,25 @@ static void test_signal_interrupt_reader(void) {
     uint32_t timestamp;
     while (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
         atomic_fetch_add(&g_read_count, 1);
+        int len = strnlen(read_buf, sizeof(read_buf));
+        atomic_fetch_add(&g_read_sum, len);
     }
     
     int writes = atomic_load(&g_write_count);
     int reads = atomic_load(&g_read_count);
     int signals = atomic_load(&g_signal_count);
+    long long write_sum = atomic_load(&g_write_sum);
+    long long read_sum = atomic_load(&g_read_sum);
     
-    printf("✓ test_signal_interrupt_reader passed (wrote: %d, read: %d, signals: %d)\n", 
-           writes, reads, signals);
+    printf("✓ test_signal_interrupt_reader passed (wrote: %d, read: %d, signals: %d, write_sum: %lld, read_sum: %lld)\n", 
+           writes, reads, signals, write_sum, read_sum);
     
     assert(signals == 1000); // Signal handler should have been called 1000 times
     assert(reads > 0);
     assert(writes > 0);
     assert(reads <= writes);
     assert(unilog_is_empty(&g_log));
+    assert(write_sum == read_sum);
 }
 
 static void test_signal_interrupt_writer(void) {
@@ -125,6 +142,8 @@ static void test_signal_interrupt_writer(void) {
     atomic_store(&g_read_count, 0);
     atomic_store(&g_running, 1);
     atomic_store(&g_signal_count, 0);
+    atomic_store(&g_write_sum, 0);
+    atomic_store(&g_read_sum, 0);
     
     unilog_init(&g_log, buffer, sizeof(buffer));
     
@@ -159,20 +178,25 @@ static void test_signal_interrupt_writer(void) {
     uint32_t timestamp;
     while (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
         atomic_fetch_add(&g_read_count, 1);
+        int len = strnlen(read_buf, sizeof(read_buf));
+        atomic_fetch_add(&g_read_sum, len);
     }
     
     int writes = atomic_load(&g_write_count);
     int reads = atomic_load(&g_read_count);
     int signals = atomic_load(&g_signal_count);
+    long long write_sum = atomic_load(&g_write_sum);
+    long long read_sum = atomic_load(&g_read_sum);
     
-    printf("✓ test_signal_interrupt_writer passed (wrote: %d, read: %d, signals: %d)\n", 
-           writes, reads, signals);
+    printf("✓ test_signal_interrupt_writer passed (wrote: %d, read: %d, signals: %d, write_sum: %lld, read_sum: %lld)\n", 
+           writes, reads, signals, write_sum, read_sum);
     
     assert(signals == 1000); // Signal handler should have been called 1000 times
     assert(reads > 0);
     assert(writes > 0);
     assert(reads <= writes);
     assert(unilog_is_empty(&g_log));
+    assert(write_sum == read_sum);
 }
 
 int main(void) {

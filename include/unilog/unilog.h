@@ -39,7 +39,8 @@ typedef enum {
     UNILOG_OK = 0,
     UNILOG_ERR_FULL = -1,
     UNILOG_ERR_INVALID = -2,
-    UNILOG_ERR_EMPTY = -3
+    UNILOG_ERR_EMPTY = -3,
+    UNILOG_ERR_BUSY = -4
 } unilog_result_t;
 
 /**
@@ -58,8 +59,8 @@ typedef struct {
 /**
  * @brief Log entry header stored in the ring buffer
  * 
- * Note: Structure is packed and written byte-by-byte to avoid alignment issues.
- * The MPSC pattern ensures that producers reserve space atomically before writing,
+ * Note: Structure is aligned to 4 bytes. Producers reserve space 
+ * atomically to prevent conflicting writes, and write the length last
  * so consumers will only read complete entries.
  */
 typedef struct {

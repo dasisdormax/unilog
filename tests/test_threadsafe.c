@@ -17,6 +17,9 @@ static _Atomic(int) g_write_count;
 static _Atomic(int) g_read_count;
 static _Atomic(int) g_running;
 
+static _Atomic(long long) g_write_sum;
+static _Atomic(long long) g_read_sum;
+
 typedef struct {
     int thread_id;
 } thread_arg_t;
@@ -26,10 +29,12 @@ static void *producer_thread(void *arg) {
     int tid = targ->thread_id;
     
     for (int i = 0; i < MESSAGES_PER_THREAD; i++) {
+        int len = snprintf(NULL, 0, "Thread %d message %d", tid, i);
         unilog_result_t res = unilog_format(&g_log, UNILOG_LEVEL_INFO, tid * 1000 + i,
                                             "Thread %d message %d", tid, i);
         if (res == UNILOG_OK) {
             atomic_fetch_add(&g_write_count, 1);
+            atomic_fetch_add(&g_write_sum, len);
         }
     }
     
@@ -46,12 +51,16 @@ static void *consumer_thread(void *arg) {
     while (atomic_load(&g_running)) {
         if (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
             atomic_fetch_add(&g_read_count, 1);
+            int len = strnlen(read_buf, sizeof(read_buf));
+            atomic_fetch_add(&g_read_sum, len);
         }
     }
     
     // Read any remaining messages
     while (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
         atomic_fetch_add(&g_read_count, 1);
+        int len = strnlen(read_buf, sizeof(read_buf));
+        atomic_fetch_add(&g_read_sum, len);
     }
     
     return NULL;
@@ -62,6 +71,8 @@ static void test_concurrent_writes(void) {
     
     atomic_store(&g_write_count, 0);
     atomic_store(&g_read_count, 0);
+    atomic_store(&g_write_sum, 0);
+    atomic_store(&g_read_sum, 0);
     
     unilog_init(&g_log, buffer, sizeof(buffer));
     
@@ -86,16 +97,21 @@ static void test_concurrent_writes(void) {
     
     while (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
         atomic_fetch_add(&g_read_count, 1);
+        int len = strnlen(read_buf, sizeof(read_buf));
+        atomic_fetch_add(&g_read_sum, len);
     }
     
     int writes = atomic_load(&g_write_count);
     int reads = atomic_load(&g_read_count);
+    long long write_sum = atomic_load(&g_write_sum);
+    long long read_sum = atomic_load(&g_read_sum);
     
-    printf("✓ test_concurrent_writes passed (wrote: %d, read: %d)\n", writes, reads);
+    printf("✓ test_concurrent_writes passed (wrote: %d, read: %d, write_sum: %lld, read_sum: %lld)\n", writes, reads, write_sum, read_sum);
     
     /* We should have read all written messages (or at least most if buffer was full) */
     assert(reads > 0);
     assert(reads <= writes);
+    assert(write_sum == read_sum);
 }
 
 static void test_concurrent_read_write(void) {
@@ -104,6 +120,8 @@ static void test_concurrent_read_write(void) {
     atomic_store(&g_write_count, 0);
     atomic_store(&g_read_count, 0);
     atomic_store(&g_running, 1);
+    atomic_store(&g_write_sum, 0);
+    atomic_store(&g_read_sum, 0);
     
     unilog_init(&g_log, buffer, sizeof(buffer));
     
@@ -130,12 +148,15 @@ static void test_concurrent_read_write(void) {
     
     int writes = atomic_load(&g_write_count);
     int reads = atomic_load(&g_read_count);
+    long long write_sum = atomic_load(&g_write_sum);
+    long long read_sum = atomic_load(&g_read_sum);
     
-    printf("✓ test_concurrent_read_write passed (wrote: %d, read: %d)\n", writes, reads);
+    printf("✓ test_concurrent_read_write passed (wrote: %d, read: %d, write_sum: %lld, read_sum: %lld)\n", writes, reads, write_sum, read_sum);
     
     assert(reads > 0);
     assert(reads <= writes);
     assert(unilog_is_empty(&g_log));
+    assert(write_sum == read_sum);
 }
 
 static void *mixed_producer(void *arg) {
@@ -145,12 +166,19 @@ static void *mixed_producer(void *arg) {
     for (int i = 0; i < MESSAGES_PER_THREAD / 2; i++) {
         /* Alternate between formatted and raw writes */
         if (i % 2 == 0) {
-            unilog_format(&g_log, UNILOG_LEVEL_DEBUG, tid * 1000 + i,
+            int len = snprintf(NULL, 0, "Formatted: T%d M%d", tid, i);
+            unilog_result_t res = unilog_format(&g_log, UNILOG_LEVEL_DEBUG, tid * 1000 + i,
                         "Formatted: T%d M%d", tid, i);
+            if (res == UNILOG_OK) {
+                atomic_fetch_add(&g_write_sum, len);
+            }
         } else {
             char msg[64];
             int len = snprintf(msg, sizeof(msg), "Raw: T%d M%d", tid, i);
-            unilog_write_raw(&g_log, UNILOG_LEVEL_INFO, tid * 1000 + i, msg, len);
+            unilog_result_t res = unilog_write_raw(&g_log, UNILOG_LEVEL_INFO, tid * 1000 + i, msg, len);
+            if (res == UNILOG_OK) {
+                atomic_fetch_add(&g_write_sum, len);
+            }
         }
     }
     
@@ -161,6 +189,8 @@ static void test_mixed_operations(void) {
     uint8_t buffer[8192];
     
     unilog_init(&g_log, buffer, sizeof(buffer));
+    atomic_store(&g_write_sum, 0);
+    atomic_store(&g_read_sum, 0);
     
     pthread_t threads[NUM_THREADS];
     thread_arg_t args[NUM_THREADS];
@@ -183,11 +213,17 @@ static void test_mixed_operations(void) {
     int count = 0;
     
     while (unilog_read(&g_log, &level, &timestamp, read_buf, sizeof(read_buf)) > 0) {
+        int len = strnlen(read_buf, sizeof(read_buf));
         count++;
+        atomic_fetch_add(&g_read_sum, len);
     }
     
-    printf("✓ test_mixed_operations passed (read %d messages)\n", count);
+    long long write_sum = atomic_load(&g_write_sum);
+    long long read_sum = atomic_load(&g_read_sum);
+    
+    printf("✓ test_mixed_operations passed (read %d messages, write_sum: %lld, read_sum: %lld)\n", count, write_sum, read_sum);
     assert(count > 0);
+    assert(write_sum == read_sum);
 }
 
 static void test_level_change_concurrent(void) {

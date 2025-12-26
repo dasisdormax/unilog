@@ -54,7 +54,7 @@ unilog_set_level(&logger, UNILOG_LEVEL_INFO);
 
 /* Write formatted log messages */
 unilog_write(&logger, UNILOG_LEVEL_INFO, timestamp, "System started");
-unilog_write(&logger, UNILOG_LEVEL_ERROR, timestamp, "Error code: 0x%X", error);
+unilog_format(&logger, UNILOG_LEVEL_ERROR, timestamp, "Error code: 0x%X", error);
 
 /* Write raw messages */
 const char *msg = "Raw message";

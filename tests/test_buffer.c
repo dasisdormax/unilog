@@ -131,7 +131,7 @@ static void test_alternating_write_read(void) {
     unilog_init(&log, buffer, sizeof(buffer));
     
     /* Alternate between writing and reading */
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 200; i++) {
         assert(unilog_format(&log, UNILOG_LEVEL_INFO, i, "Message %d", i) == UNILOG_OK);
         
         int len = unilog_read(&log, &level, &timestamp, read_buf, sizeof(read_buf));

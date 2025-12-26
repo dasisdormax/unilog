@@ -67,7 +67,8 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
     
     /* Calculate total entry size (aligned) */
     uint32_t header_size = sizeof(unilog_entry_header_t);
-    uint32_t total_size = align_up(header_size + msg_len + 1);  /* +1 for null terminator */
+    uint32_t total_size = header_size + msg_len;
+    uint32_t advance_by = align_up(total_size);
     
     /* Check if entry is too large */
     if (total_size > log->buffer.capacity / 2) {
@@ -89,11 +90,11 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
         uint32_t used = (write_pos - read_pos) & mask;
         uint32_t available = capacity - used - 1;  /* -1 to distinguish full from empty */
         
-        if (total_size > available) {
+        if (advance_by > available) {
             return UNILOG_ERR_FULL;
         }
         
-        new_write_pos = (write_pos + total_size) & mask;
+        new_write_pos = (write_pos + advance_by) & mask;
     } while (!atomic_compare_exchange_weak_explicit(&log->buffer.write_pos, &write_pos, 
                                                       new_write_pos, memory_order_release, 
                                                       memory_order_acquire));
@@ -107,10 +108,10 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
     header.level = level;
     header.timestamp = timestamp;
     
-    uint32_t pos = write_pos;
+    uint32_t pos = (write_pos + sizeof(header.length)) & mask;
     
-    /* Copy header */
-    for (size_t i = 0; i < sizeof(header); i++) {
+    /* Copy header, excluding length */
+    for (size_t i = sizeof(header.length); i < sizeof(header); i++) {
         buffer[pos] = ((uint8_t *)&header)[i];
         pos = (pos + 1) & mask;
     }
@@ -121,15 +122,15 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
         pos = (pos + 1) & mask;
     }
     
-    /* Write null terminator */
-    buffer[pos] = '\0';
-    pos = (pos + 1) & mask;
-    
     /* Pad to alignment */
     while (pos != new_write_pos) {
         buffer[pos] = 0;
         pos = (pos + 1) & mask;
     }
+
+    /* Mark entry as complete by writing length last (atomic release) */
+    atomic_store_explicit((_Atomic uint32_t *)&buffer[write_pos],
+            header.length, memory_order_release);
     
     return UNILOG_OK;
 }
@@ -193,37 +194,54 @@ int unilog_read(unilog_t *log, unilog_level_t *level, uint32_t *timestamp,
     
     uint8_t *buf = log->buffer.buffer;
     
+    /* Check if message was written completely (load length with acquire) */
+    uint32_t total_size = atomic_load_explicit((_Atomic uint32_t *)&buf[read_pos], memory_order_acquire);
+    if (total_size == 0) {
+        return UNILOG_ERR_BUSY;  /* Message not yet complete */
+    }
+
+    if (total_size > capacity / 2) {
+        return UNILOG_ERR_INVALID;
+    }
+
+    atomic_store_explicit((_Atomic uint32_t *)&buf[read_pos], 0, memory_order_relaxed);
+
     /* Read header */
     unilog_entry_header_t header;
-    uint32_t pos = read_pos;
-    
-    for (size_t i = 0; i < sizeof(header); i++) {
+    header.length = total_size;
+
+    uint32_t pos = (read_pos + sizeof(header.length)) & mask;
+    for (size_t i = sizeof(header.length); i < sizeof(header); i++) {
         ((uint8_t *)&header)[i] = buf[pos];
+        buf[pos] = 0;
         pos = (pos + 1) & mask;
-    }
-    
-    /* Validate header */
-    if (header.length == 0 || header.length > capacity / 2) {
-        return UNILOG_ERR_INVALID;
     }
     
     *level = header.level;
     *timestamp = header.timestamp;
     
     /* Calculate message length */
-    uint32_t msg_len = header.length - sizeof(header);
+    uint32_t msg_len = total_size - sizeof(header);
     uint32_t copy_len = msg_len < buffer_size ? msg_len : buffer_size - 1;
     
     /* Read message */
     for (size_t i = 0; i < copy_len; i++) {
         buffer[i] = buf[pos];
+        buf[pos] = 0;
         pos = (pos + 1) & mask;
     }
     buffer[copy_len] = '\0';
     
     /* Update read position with release semantics */
-    uint32_t new_read_pos = (read_pos + header.length) & mask;
+    uint32_t advance_by = align_up(header.length);
+    uint32_t new_read_pos = (read_pos + advance_by) & mask;
     atomic_store_explicit(&log->buffer.read_pos, new_read_pos, memory_order_release);
+
+    /* Clear padding */
+    while (pos != new_read_pos) {
+        buf[pos] = 0;
+        pos = (pos + 1) & mask;
+    }
     
     return (int)copy_len;
 }
