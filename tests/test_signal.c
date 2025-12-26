@@ -22,7 +22,10 @@ static void signal_handler(int sig) {
     (void)sig; // unused
     struct timespec ts = {0, 5000L};
     nanosleep(&ts, NULL); // Simulate some work
-    unilog_write(&g_log, UNILOG_LEVEL_WARN, 999999, "Signal handler message");
+    unilog_result_t res = unilog_write(&g_log, UNILOG_LEVEL_WARN, 999999, "Signal handler message");
+    if (res == UNILOG_OK) {
+        atomic_fetch_add(&g_write_count, 1);
+    }
     atomic_fetch_add(&g_signal_count, 1);
 }
 
@@ -111,6 +114,7 @@ static void test_signal_interrupt_reader(void) {
     assert(reads > 0);
     assert(writes > 0);
     assert(reads <= writes);
+    assert(unilog_is_empty(&g_log));
 }
 
 static void test_signal_interrupt_writer(void) {
@@ -137,7 +141,7 @@ static void test_signal_interrupt_writer(void) {
     
     /* Send signals to writer thread until 1000 delivered */
     for (int signal_count = 1; signal_count <= 1000; signal_count++) {
-        pthread_kill(reader, SIGUSR1);
+        pthread_kill(writer, SIGUSR2);
         while(atomic_load(&g_signal_count) < signal_count) {
             struct timespec ts = {0, 50000L}; // 50us
             nanosleep(&ts, NULL);
@@ -168,6 +172,7 @@ static void test_signal_interrupt_writer(void) {
     assert(reads > 0);
     assert(writes > 0);
     assert(reads <= writes);
+    assert(unilog_is_empty(&g_log));
 }
 
 int main(void) {

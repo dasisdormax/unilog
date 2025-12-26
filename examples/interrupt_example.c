@@ -27,7 +27,7 @@ static void *producer_thread(void *arg) {
     struct timespec ts = {0, 1000000L};
     
     for (int i = 0; i < 10; i++) {
-        unilog_write(&g_log, UNILOG_LEVEL_INFO, get_timestamp(),
+        unilog_format(&g_log, UNILOG_LEVEL_INFO, get_timestamp(),
                      "Thread %d: message %d", thread_id, i);
         nanosleep(&ts, NULL);
     }

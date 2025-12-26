@@ -19,7 +19,7 @@ static void test_buffer_wrap(void) {
     
     /* Fill buffer with messages */
     for (int i = 0; i < 10; i++) {
-        unilog_result_t res = unilog_write(&log, UNILOG_LEVEL_INFO, i, "Message %d", i);
+        unilog_result_t res = unilog_format(&log, UNILOG_LEVEL_INFO, i, "Message %d", i);
         if (res == UNILOG_ERR_FULL) {
             break;
         }
@@ -34,7 +34,7 @@ static void test_buffer_wrap(void) {
     
     /* Write more messages (should wrap around) */
     for (int i = 10; i < 15; i++) {
-        unilog_result_t res = unilog_write(&log, UNILOG_LEVEL_INFO, i, "Message %d", i);
+        unilog_result_t res = unilog_format(&log, UNILOG_LEVEL_INFO, i, "Message %d", i);
         if (res != UNILOG_OK && res != UNILOG_ERR_FULL) {
             assert(0);  /* Unexpected error */
         }
@@ -52,7 +52,7 @@ static void test_buffer_full(void) {
     /* Fill buffer until full */
     int count = 0;
     for (int i = 0; i < 100; i++) {
-        unilog_result_t res = unilog_write(&log, UNILOG_LEVEL_INFO, i, "Test message %d", i);
+        unilog_result_t res = unilog_format(&log, UNILOG_LEVEL_INFO, i, "Test message %d", i);
         if (res == UNILOG_ERR_FULL) {
             break;
         }
@@ -93,10 +93,9 @@ static void test_large_message(void) {
     memset(large_msg, 'A', sizeof(large_msg) - 1);
     large_msg[sizeof(large_msg) - 1] = '\0';
     
-    /* This should either succeed (if it fits) or return an error */
-    unilog_result_t res = unilog_write(&log, UNILOG_LEVEL_INFO, 0, "%s", large_msg);
-    /* Message will be truncated by vsnprintf, so it should succeed */
-    assert(res == UNILOG_OK || res == UNILOG_ERR_FULL);
+    /* This should return an error */
+    unilog_result_t res = unilog_write(&log, UNILOG_LEVEL_INFO, 0, large_msg);
+    assert(res == UNILOG_ERR_INVALID);
     
     printf("✓ test_large_message passed\n");
 }
@@ -133,7 +132,7 @@ static void test_alternating_write_read(void) {
     
     /* Alternate between writing and reading */
     for (int i = 0; i < 20; i++) {
-        assert(unilog_write(&log, UNILOG_LEVEL_INFO, i, "Message %d", i) == UNILOG_OK);
+        assert(unilog_format(&log, UNILOG_LEVEL_INFO, i, "Message %d", i) == UNILOG_OK);
         
         int len = unilog_read(&log, &level, &timestamp, read_buf, sizeof(read_buf));
         assert(len > 0);

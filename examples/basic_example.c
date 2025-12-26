@@ -32,11 +32,11 @@ int main(void) {
     
     /* Write some log messages */
     printf("Writing log messages...\n");
-    unilog_write(&log, UNILOG_LEVEL_INFO, get_timestamp(), "System initialized");
-    unilog_write(&log, UNILOG_LEVEL_DEBUG, get_timestamp(), "Debug value: %d", 42);
-    unilog_write(&log, UNILOG_LEVEL_WARN, get_timestamp(), "Warning: value out of range");
-    unilog_write(&log, UNILOG_LEVEL_ERROR, get_timestamp(), "Error code: 0x%X", 0xDEADBEEF);
-    unilog_write(&log, UNILOG_LEVEL_TRACE, get_timestamp(), "This trace won't be logged (below threshold)");
+    unilog_format(&log, UNILOG_LEVEL_INFO, get_timestamp(), "System initialized");
+    unilog_format(&log, UNILOG_LEVEL_DEBUG, get_timestamp(), "Debug value: %d", 42);
+    unilog_format(&log, UNILOG_LEVEL_WARN, get_timestamp(), "Warning: value out of range");
+    unilog_format(&log, UNILOG_LEVEL_ERROR, get_timestamp(), "Error code: 0x%X", 0xDEADBEEF);
+    unilog_format(&log, UNILOG_LEVEL_TRACE, get_timestamp(), "This trace won't be logged (below threshold)");
     
     /* Write a raw message */
     const char *raw_msg = "Raw message without formatting";

@@ -105,7 +105,8 @@ unilog_level_t unilog_get_level(const unilog_t *log);
 /**
  * @brief Write a formatted log message
  * 
- * This function is interrupt-safe and lock-free.
+ * This function is thread-safe and lock-free, but NOT
+ * interrupt-safe due to use of variable arguments.
  * Uses snprintf internally for formatting.
  * 
  * @param log Pointer to unilog context
@@ -115,7 +116,7 @@ unilog_level_t unilog_get_level(const unilog_t *log);
  * @param ... Variable arguments for format string
  * @return UNILOG_OK on success, error code otherwise
  */
-unilog_result_t unilog_write(unilog_t *log, unilog_level_t level, 
+unilog_result_t unilog_format(unilog_t *log, unilog_level_t level, 
                               uint32_t timestamp, const char *format, ...);
 
 /**
@@ -134,6 +135,21 @@ unilog_result_t unilog_write(unilog_t *log, unilog_level_t level,
 unilog_result_t unilog_write_raw(unilog_t *log, unilog_level_t level,
                                   uint32_t timestamp, const char *message,
                                   size_t length);
+
+/**
+ * @brief Write a null-terminated message
+ * 
+ * This function is interrupt-safe and lock-free.
+ * Determines message length using strlen.
+ * 
+ * @param log Pointer to unilog context
+ * @param level Log level
+ * @param timestamp Timestamp value (implementation-defined)
+ * @param message Null-terminated message string
+ * @return UNILOG_OK on success, error code otherwise
+ */
+unilog_result_t unilog_write(unilog_t *log, unilog_level_t level,
+                             uint32_t timestamp, const char *message);
 
 /**
  * @brief Read the next log entry from the buffer

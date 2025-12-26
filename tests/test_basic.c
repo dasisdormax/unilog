@@ -79,7 +79,7 @@ static void test_formatted_write(void) {
     unilog_init(&log, buffer, sizeof(buffer));
     
     /* Write formatted message */
-    assert(unilog_write(&log, UNILOG_LEVEL_DEBUG, 100, "Value: %d, Hex: 0x%X", 42, 0xABCD) == UNILOG_OK);
+    assert(unilog_format(&log, UNILOG_LEVEL_DEBUG, 100, "Value: %d, Hex: 0x%X", 42, 0xABCD) == UNILOG_OK);
     
     /* Read and verify */
     int len = unilog_read(&log, &level, &timestamp, read_buf, sizeof(read_buf));

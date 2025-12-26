@@ -71,6 +71,7 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
     
     /* Check if entry is too large */
     if (total_size > log->buffer.capacity / 2) {
+        /* TODO: Check if we really need this restriction */
         return UNILOG_ERR_INVALID;
     }
     
@@ -133,7 +134,7 @@ static unilog_result_t unilog_write_internal(unilog_t *log, unilog_level_t level
     return UNILOG_OK;
 }
 
-unilog_result_t unilog_write(unilog_t *log, unilog_level_t level,
+unilog_result_t unilog_format(unilog_t *log, unilog_level_t level,
                               uint32_t timestamp, const char *format, ...) {
     if (!log || !format) {
         return UNILOG_ERR_INVALID;
@@ -162,6 +163,14 @@ unilog_result_t unilog_write_raw(unilog_t *log, unilog_level_t level,
                                   uint32_t timestamp, const char *message,
                                   size_t length) {
     return unilog_write_internal(log, level, timestamp, message, length);
+}
+
+unilog_result_t unilog_write(unilog_t *log, unilog_level_t level,
+                             uint32_t timestamp, const char *message) {
+    if (!message) {
+        return UNILOG_ERR_INVALID;
+    }
+    return unilog_write_internal(log, level, timestamp, message, strlen(message));
 }
 
 int unilog_read(unilog_t *log, unilog_level_t *level, uint32_t *timestamp,

@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/tests/test_signal",
             "args": [],
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,

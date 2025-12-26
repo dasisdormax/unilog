@@ -26,7 +26,7 @@ static void *producer_thread(void *arg) {
     int tid = targ->thread_id;
     
     for (int i = 0; i < MESSAGES_PER_THREAD; i++) {
-        unilog_result_t res = unilog_write(&g_log, UNILOG_LEVEL_INFO, tid * 1000 + i,
+        unilog_result_t res = unilog_format(&g_log, UNILOG_LEVEL_INFO, tid * 1000 + i,
                                             "Thread %d message %d", tid, i);
         if (res == UNILOG_OK) {
             atomic_fetch_add(&g_write_count, 1);
@@ -135,6 +135,7 @@ static void test_concurrent_read_write(void) {
     
     assert(reads > 0);
     assert(reads <= writes);
+    assert(unilog_is_empty(&g_log));
 }
 
 static void *mixed_producer(void *arg) {
@@ -144,7 +145,7 @@ static void *mixed_producer(void *arg) {
     for (int i = 0; i < MESSAGES_PER_THREAD / 2; i++) {
         /* Alternate between formatted and raw writes */
         if (i % 2 == 0) {
-            unilog_write(&g_log, UNILOG_LEVEL_DEBUG, tid * 1000 + i,
+            unilog_format(&g_log, UNILOG_LEVEL_DEBUG, tid * 1000 + i,
                         "Formatted: T%d M%d", tid, i);
         } else {
             char msg[64];
